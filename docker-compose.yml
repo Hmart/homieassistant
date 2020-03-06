@@ -1,0 +1,72 @@
+version: "3.2"
+
+services:
+  django:
+    build: .
+    image: django-homieassistant
+    container_name: django-homieassistant
+    depends_on:
+      - postgres
+      - redis
+    env_file: .env
+    volumes:
+      - "static_files:/var/www/static/"
+      - "media_files:/var/www/media/"
+      - "./homieassistant:/app"
+    # Use runserver for local development not uwsgi
+    command: "python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  postgres:
+    image: postgres:10.9-alpine
+    container_name: postgres-homieassistant
+    environment:
+      POSTGRES_DB: homieassistant
+      POSTGRES_PASSWORD: supersecret
+    volumes:
+      - "dbdata:/var/lib/postgresql/data"
+    # Expose port to localhost for debugging
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  redis:
+    image: redis:5
+    container_name: redis-homieassistant
+
+  rabbitmq:
+    image: rabbitmq:3.7-management
+    container_name: rabbitmq-homieassistant
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=b0lag
+
+  celery-scheduler:
+    image: django-homieassistant
+    container_name: celery-scheduler-homieassistant
+    depends_on:
+      - django
+    env_file: .env
+    entrypoint: "celery -A homieassistant beat -l info"
+    volumes:
+      - "static_files:/var/www/static/"
+      - "media_files:/var/www/media/"
+      - "./homieassistant:/app"
+
+  celery-worker:
+    image: django-homieassistant
+    container_name: celery-worker-homieassistant
+    depends_on:
+      - django
+      - rabbitmq
+    env_file: .env
+    entrypoint: "celery -A homieassistant worker -l info"
+    volumes:
+      - "static_files:/var/www/static/"
+      - "media_files:/var/www/media/"
+      - "./homieassistant:/app"
+
+volumes:
+  dbdata:
+  static_files:
+  media_files:
