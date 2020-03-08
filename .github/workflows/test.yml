@@ -1,0 +1,62 @@
+on: [push]  
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:10.9-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python 3.8
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.8'
+
+      - name: Cache pip
+        uses: actions/cache@v1
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            ${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with flake8
+        working-directory: ./homieassistant
+        run: |
+          pip install flake8
+          flake8 ./homieassistant
+
+      - name: Format code with Black
+        working-directory: ./homieassistant
+        run: |
+          python -m black .
+
+      - name: Order imports with isort 
+        working-directory: ./homieassistant
+        run: |
+          python -m isort -rc
+
+      - name: Run tests with coverage
+        working-directory: ./homieassistant
+        run: |
+          coverage run ./manage.py test --settings=homieassistant.settings_test && coverage report
+        env:
+          DB_HOST: localhost
+          DB_PASSWORD: postgres
